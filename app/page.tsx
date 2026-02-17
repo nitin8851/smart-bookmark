@@ -9,6 +9,7 @@ export default function Home() {
   const [url, setUrl] = useState("")
   const [bookmarks, setBookmarks] = useState<any[]>([])
 
+  // get logged in user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
@@ -16,6 +17,7 @@ export default function Home() {
     })
   }, [])
 
+  // realtime listener
   useEffect(() => {
     if (!user) return
 
@@ -24,9 +26,7 @@ export default function Home() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookmarks" },
-        () => {
-          loadBookmarks(user.id)
-        }
+        () => loadBookmarks(user.id)
       )
       .subscribe()
 
@@ -51,21 +51,33 @@ export default function Home() {
     setBookmarks(data || [])
   }
 
+  // ADD bookmark (no overwrite)
   const addBookmark = async () => {
     if (!title || !url) return alert("Fill both fields")
 
-    await supabase.from("bookmarks").insert({
-      title,
-      url,
-      user_id: user.id,
-    })
+    const { error } = await supabase.from("bookmarks").insert([
+      {
+        title,
+        url,
+        user_id: user.id,
+      },
+    ])
+
+    if (error) return alert(error.message)
 
     setTitle("")
     setUrl("")
   }
 
+  // DELETE bookmark (user protected)
   const deleteBookmark = async (id: string) => {
-    await supabase.from("bookmarks").delete().eq("id", id)
+    const { error } = await supabase
+      .from("bookmarks")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id)
+
+    if (error) alert(error.message)
   }
 
   if (!user) {
