@@ -9,7 +9,7 @@ export default function Home() {
   const [url, setUrl] = useState("")
   const [bookmarks, setBookmarks] = useState<any[]>([])
 
-  // get logged in user
+  // get logged user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
@@ -17,7 +17,7 @@ export default function Home() {
     })
   }, [])
 
-  // realtime listener
+  // realtime
   useEffect(() => {
     if (!user) return
 
@@ -51,7 +51,7 @@ export default function Home() {
     setBookmarks(data || [])
   }
 
-  // ADD bookmark (no overwrite)
+  // ADD
   const addBookmark = async () => {
     if (!title || !url) return alert("Fill both fields")
 
@@ -69,7 +69,7 @@ export default function Home() {
     setUrl("")
   }
 
-  // DELETE bookmark (user protected)
+  // DELETE
   const deleteBookmark = async (id: string) => {
     const { error } = await supabase
       .from("bookmarks")
