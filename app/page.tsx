@@ -1,125 +1,130 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
+  const [bookmarks, setBookmarks] = useState<any[]>([])
   const [title, setTitle] = useState("")
   const [url, setUrl] = useState("")
-  const [bookmarks, setBookmarks] = useState<any[]>([])
 
-  // get logged user
+  // Get user session
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser()
       setUser(data.user)
-      if (data.user) loadBookmarks(data.user.id)
-    })
+
+      if (data.user) {
+        fetchBookmarks(data.user.id)
+      }
+    }
+
+    getUser()
   }, [])
 
-  // realtime
-  useEffect(() => {
-    if (!user) return
+  // Fetch bookmarks
+  const fetchBookmarks = async (userId: string) => {
+    const { data } = await supabase
+      .from("bookmarks")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
 
-    const channel = supabase
-      .channel("bookmarks")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bookmarks" },
-        () => loadBookmarks(user.id)
-      )
-      .subscribe()
+    setBookmarks(data || [])
+  }
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user])
-
+  // Login with Google
   const login = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
     })
   }
 
-  const loadBookmarks = async (uid: string) => {
-    const { data } = await supabase
-      .from("bookmarks")
-      .select("*")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false })
-
-    setBookmarks(data || [])
+  // Logout
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    setBookmarks([])
   }
 
-  // ADD
+  // Add Bookmark
   const addBookmark = async () => {
-    if (!title || !url) return alert("Fill both fields")
+    if (!title || !url) return
 
-    const { error } = await supabase.from("bookmarks").insert([
-      {
+    const { data } = await supabase
+      .from("bookmarks")
+      .insert({
         title,
         url,
         user_id: user.id,
-      },
-    ])
+      })
+      .select()
+      .single()
 
-    if (error) return alert(error.message)
+    // instant UI update
+    setBookmarks(prev => [data, ...prev])
 
     setTitle("")
     setUrl("")
   }
 
-  // DELETE
+  // Delete Bookmark
   const deleteBookmark = async (id: string) => {
-    const { error } = await supabase
-      .from("bookmarks")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id)
+    await supabase.from("bookmarks").delete().eq("id", id)
 
-    if (error) alert(error.message)
+    // instant UI update
+    setBookmarks(prev => prev.filter(b => b.id !== id))
   }
 
+  // If not logged in
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <button onClick={login} className="bg-black text-white px-6 py-3 rounded">
-          Login with Google
-        </button>
+      <div style={{ padding: 40 }}>
+        <h1>Smart Bookmark</h1>
+        <button onClick={login}>Login with Google</button>
       </div>
     )
   }
 
   return (
-    <div className="p-10 max-w-xl mx-auto">
-      <h2 className="text-xl mb-4">Welcome {user.email}</h2>
+    <div style={{ padding: 40 }}>
+      <h2>Logged in as: {user.email}</h2>
+      <button onClick={logout}>Logout</button>
 
+      <hr style={{ margin: "20px 0" }} />
+
+      <h3>Add Bookmark</h3>
       <input
         placeholder="Title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="border p-2 w-full mb-2"
       />
-
       <input
         placeholder="URL"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        className="border p-2 w-full mb-2"
       />
+      <button onClick={addBookmark}>Add</button>
 
-      <button onClick={addBookmark} className="bg-green-600 text-white px-4 py-2">
-        Add Bookmark
-      </button>
+      <hr style={{ margin: "20px 0" }} />
 
-      <ul className="mt-6">
-        {bookmarks.map((b) => (
-          <li key={b.id} className="flex justify-between border-b py-2">
-            <a href={b.url} target="_blank">{b.title}</a>
-            <button onClick={() => deleteBookmark(b.id)}>❌</button>
-          </li>
-        ))}
-      </ul>
+      <h3>Your Bookmarks</h3>
+
+      {bookmarks.map((b) => (
+        <div key={b.id} style={{ marginBottom: 10 }}>
+          <a href={b.url} target="_blank">
+            {b.title}
+          </a>
+
+          <button
+            style={{ marginLeft: 10 }}
+            onClick={() => deleteBookmark(b.id)}
+          >
+            Delete
+          </button>
+        </div>
+      ))}
     </div>
   )
 }
